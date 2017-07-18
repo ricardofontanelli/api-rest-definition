@@ -22,18 +22,44 @@ Content-Type: text/html; charset=UTF-8
 - Configure handlers de erro no formato json em seu framework de backend para garantir que ele nunca envie uma resposta no formato HTML, por exemplo;
 ```php
 <?php
+// Exemplo Laravel 5.4
 // app/Exceptions/Handler.php
+<?php
+
 namespace App\Exceptions;
 
 use Exception;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
-use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Config;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\ValidationException;
+
+use Illuminate\Contracts\Container\Container;
+use Psr\Log\LoggerInterface;
 
 class Handler extends ExceptionHandler
 {
+
+    /**
+     * The app config repository.
+     *
+     * @var \Illuminate\Config\Repository
+    */
+    protected $config;
+    
+    /**
+     * The container instance.
+     *
+     * @var \Illuminate\Contracts\Container\Container
+    */
+    protected $container;
+
+    public function __construct(Container $container)
+    {
+        $this->config    = $container->config;
+        $this->container = $container;
+    }
+
     /**
      * A list of the exception types that should not be reported.
      *
@@ -53,24 +79,28 @@ class Handler extends ExceptionHandler
      *
      * This is a great spot to send exceptions to Sentry, Bugsnag, etc.
      *
-     * @param  \Exception  $exception
-     * @return void
+     * @param \Exception $exception
      */
     public function report(Exception $exception)
     {
-        if (\App::environment('production')) {
-            if (app()->bound('sentry')) {
-                $sentry = app('sentry');
-                // Add tags context
+        if ($this->shouldReport($exception)) {
+            // A Config to represent if remote error log is switched on to this env 
+            if ($this->config->get('app.monitoring_errors')) {
+                $sentry = $this->container->sentry;
+                // Build you own $session variable
                 $session = $_REQUEST;
+
+                // Add user context
                 $sentry->user_context($session);
+                
+                // Add tags context
                 $sentry->tags_context(
                     [
-                        'referer' => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : null,
-                        'referer-ip' => \Request::getClientIp(true)
+                        'referer'       => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : null,
+                        'referer-ip'    => $this->container->request->getClientIp(true)
                     ]
                 );
-                app('sentry')->captureException($exception);
+                $sentry->captureException($exception);
             }
         }
         parent::report($exception);
@@ -79,61 +109,54 @@ class Handler extends ExceptionHandler
     /**
      * Render an exception into an HTTP response.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Exception  $exception
+     * @param \Illuminate\Http\Request $request
+     * @param \Exception               $exception
+     *
      * @return \Illuminate\Http\Response
      */
     public function render($request, Exception $exception)
     {
         $code = $exception->getStatusCode();
 
-        if ($this->isHttpException($exception)) {
-            if ($code == 500) {
-                Log::error($exception);
-            }
-            return response()->json([
-                'errors' => [
-                    [
-                        'code' => $code
-                        'title' => Response::$statusTexts[$code],
-                    ],
-                ]
-            ], $code);
-        } else {
-            Log::error($exception);
-            $response = ['errors' => [['code' => $code, 'title' => 'Internal error']]];
-            if (Config::get('app.debug')) {
-                $response['meta']['debug'] = [
-                    'message' => $e->getMessage(),
-                    'line' => $e->getLine(),
-                    'file' => $e->getFile()
-                ];
-            }
-            return response()->json($response, 500);
+        if ($exception instanceof ModelNotFoundException) {
+            return response()->json(['errors' =>[['code' => 404,'title' => Response::$statusTexts[$code]]]], 404);
         }
+
+        if ($exception instanceof ValidationException) {
+            return $this->convertValidationExceptionToResponse($exception, $request);
+        }
+
+        if (method_exists($exception, 'getStatusCode')) {
+            return response()->json(['errors' =>[['code' => $code,'title' => Response::$statusTexts[$code]]]], $code);
+        }
+
+        if ($exception instanceof AuthenticationException) {
+            return $this->unauthenticated($request, $exception);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['errors' =>[['code' => 422,'title' => Response::$statusTexts[422]]]], 422);
+        }
+
+        return redirect()->guest(route('login.login'));
     }
 
     /**
      * Convert an authentication exception into an unauthenticated response.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Illuminate\Auth\AuthenticationException  $exception
+     * @param \Illuminate\Http\Request                 $request
+     * @param \Illuminate\Auth\AuthenticationException $exception
+     *
      * @return \Illuminate\Http\Response
      */
     protected function unauthenticated($request, AuthenticationException $exception)
     {
-        if ($request->expectsJson()) {
-            return response()->json([
-                'errors' =>[
-                    [
-                        'code' => 401,
-                        'title' => Response::$statusTexts[$code]
-                    ],
-                ]
-            ], 401);
-        }
+        $code = $exception->getStatusCode();
 
-        return redirect()->guest('login');
+        if ($request->expectsJson()) {
+            return response()->json(['errors' =>[['code' => 401,'title' => Response::$statusTexts[$code]]]], 401);
+        }
+        return redirect()->guest(route('login.create'));
     }
 }
 
