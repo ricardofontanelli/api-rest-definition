@@ -8,12 +8,13 @@ Access-Control-Allow-Origin: *
 ```
 - As respostas para chamadas do tipo **OPTIONS**, devem ser do tipo **204**, com body vazio e de preferência esta regra deve ser implementada direto no servidor web (apache/nginx) para otimizar a performance de sua aplicação. A opção *Access-Control-Max-Age* habilita o cache das chamadas do tipo *OPTIONS* que são geradas automaticamente pelo browser;
 ```
-Access-Control-Allow-Credentials: true
-Access-Control-Allow-Headers: X-Requested-With, Content-Type, X-Auth-Token, Origin, Authorization
-Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
 Access-Control-Allow-Origin: *
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE
+Access-Control-Allow-Headers: X-Requested-With, Content-Type, Origin, Authorization
 Access-Control-Max-Age: 864000
-Content-Type: text/html; charset=UTF-8
+Content-Type: text/plain
+Content-Length: 0
 ```
 - Todas as respostas do servidor para os métodos **DIFERENTES** de *OPTIONS* **DEVEM** incluir o header **Content-type: application/json**, **EXCETO** quando você for servir algum outro tipo de mídia, como um PDF (application/pdf), por exemplo;
 - Todas as respostas do servidor para os métodos diferentes de *OPTIONS* **DEVEM** incluir o nome da API em um HEADER do tipo ```X-API-NAME: NOME-DA-API```;
