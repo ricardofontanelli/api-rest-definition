@@ -1,5 +1,8 @@
 # API REST - DEFINIÇÕES E FORMATOS
 ---
+## Responsabilidades do Client
+- Altamente recomendado utilizar header Content-Type, onde você especifica para o servidor o tipo de conteúdo que está sendo enviado, por exemplo: ```Content-Type:application/json```;
+- Recomendado utilizar header Accept, assim você especifica para o servidor o tipo de conteúdo que espera receber como resposta, ex: Accept:application/json. Em alguns frameworks web (ex: Laravel), este header é utilizado para serializar as respostas, no caso de uma Exception, por exemplo e conforme exemplificado no Handler de erros mais abaixo;
 ## Responsabilidades do Servidor
 - O servidor deve implementar suporte a **CORS** através dos **HTTP HEADER's** abaixo. Mais sobre o assunto pode ser encontrado em [Enable CORS](https://enable-cors.org/server_nginx.html):
 ```
